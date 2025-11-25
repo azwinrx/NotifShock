@@ -4,7 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.provider.Settings
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,10 +20,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -36,7 +41,14 @@ fun AlarmView(viewModel: AlarmViewModel) {
     val context = LocalContext.current
     val keyword by viewModel.keyword.collectAsState()
     
-    var isSaved by remember { mutableStateOf(false) }
+    // State for app switches
+    val isTelegramEnabled by viewModel.isTelegramEnabled.collectAsState()
+    val isWhatsappEnabled by viewModel.isWhatsappEnabled.collectAsState()
+    val isLocked by viewModel.isLocked.collectAsState()
+    
+    // Local state for UI (editing mode) - sync with ViewModel's lock state
+    var isEditing by remember(isLocked) { mutableStateOf(!isLocked) }
+    
     var isAlarmRinging by remember { mutableStateOf(false) }
 
     // Listen for alarm state changes from SirenService
@@ -50,6 +62,9 @@ fun AlarmView(viewModel: AlarmViewModel) {
         }
         val filter = IntentFilter("ALARM_STATUS_CHANGED")
         
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        }
         onDispose {
             context.unregisterReceiver(receiver)
         }
@@ -141,11 +156,50 @@ fun AlarmView(viewModel: AlarmViewModel) {
                         ) {
                             Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("1. Wajib: Izinkan Akses Notifikasi")
+                            Text("Izinkan Akses Notifikasi (Wajib)")
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
                     }
+                    
+                    // Application Switches
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Aktifkan Aplikasi:", style = MaterialTheme.typography.labelLarge)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Telegram Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Telegram", style = MaterialTheme.typography.bodyMedium)
+                        Switch(
+                            checked = isTelegramEnabled,
+                            onCheckedChange = { viewModel.toggleTelegram(it) }
+                        )
+                    }
+
+                    // WhatsApp Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("WhatsApp", style = MaterialTheme.typography.bodyMedium)
+                        Switch(
+                            checked = isWhatsappEnabled,
+                            onCheckedChange = { viewModel.toggleWhatsapp(it) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Keyword Input
                     OutlinedTextField(
@@ -153,7 +207,7 @@ fun AlarmView(viewModel: AlarmViewModel) {
                         onValueChange = { 
                             viewModel.updateKeyword(it)
                         },
-                        enabled = !isSaved,
+                        enabled = isEditing,
                         label = { Text("Nama Kontak/Group") },
                         placeholder = { Text("Contoh: Boss, Mas Yudi, dsb") },
                         leadingIcon = { Text("@", fontWeight = FontWeight.Bold) },
@@ -181,63 +235,66 @@ fun AlarmView(viewModel: AlarmViewModel) {
                     // Save / Edit Button
                     Button(
                         onClick = { 
-                            if (isSaved) {
-                                isSaved = false // Enter edit mode
-                            } else {
+                            if (isEditing) {
                                 viewModel.saveKeyword()
-                                isSaved = true // Enter read-only mode
+                                viewModel.setLocked(true)
+                                isEditing = false
+                            } else {
+                                viewModel.setLocked(false)
+                                isEditing = true
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (!isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = if (!isSaved) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
+                            containerColor = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = if (isEditing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     ) {
                         Icon(
-                            imageVector = if (isSaved) Icons.Default.Edit else Icons.Default.Check,
+                            imageVector = if (!isEditing) Icons.Default.Edit else Icons.Default.Check,
                             contentDescription = null, 
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (isSaved) "Ubah Target" else "2. Simpan Target")
+                        Text(if (!isEditing) "Ubah Target" else "Simpan Target")
                     }
                 }
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Emergency Stop Button
+            // Stop Alarm Button
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+
             Button(
                 onClick = {
-                    if (isAlarmRinging) {
-                        val stopIntent = Intent(context, SirenService::class.java)
-                        stopIntent.action = "STOP_ALARM"
-                        context.startService(stopIntent)
-                        
-                        // Optimistic UI update
-                        isAlarmRinging = false
+                    val intent = Intent(context, SirenService::class.java).apply {
+                        action = "STOP_ALARM"
                     }
+                    context.startService(intent)
                 },
-                enabled = isAlarmRinging,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isAlarmRinging) MaterialTheme.colorScheme.error else Color.Gray,
-                    contentColor = Color.White,
-                    disabledContainerColor = Color.LightGray,
-                    disabledContentColor = Color.DarkGray
-                ),
+                interactionSource = interactionSource,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                elevation = ButtonDefaults.buttonElevation(pressedElevation = 8.dp)
+                    .height(56.dp)
+                    .scale(if (isPressed) 0.95f else 1f),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Red,
+                    contentColor = Color.White
+                )
             ) {
-                Icon(Icons.Default.Warning, contentDescription = null)
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = "Stop Alarm",
+                    modifier = Modifier.size(24.dp)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    if (isAlarmRinging) "MATIKAN ALARM SEKARANG!" else "Alarm Siaga (Standby)", 
-                    fontSize = 18.sp, 
+                    text = "STOP ALARM",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }

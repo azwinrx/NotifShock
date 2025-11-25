@@ -1,7 +1,9 @@
 package com.azwin.notifshock
 
+import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
@@ -22,15 +24,21 @@ class SirenService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
+        
+        // Check if app detection is enabled
+        val isTelegramEnabled = repository.isAppEnabled("APP_TELEGRAM")
+        val isWhatsappEnabled = repository.isAppEnabled("APP_WHATSAPP")
 
-        // Filter for Telegram packages (official and variants)
-        if (packageName.contains("telegram", ignoreCase = true)) {
+        val isTelegramPackage = packageName.contains("telegram", ignoreCase = true)
+        val isWhatsappPackage = packageName.contains("whatsapp", ignoreCase = true)
+
+        if ((isTelegramPackage && isTelegramEnabled) || (isWhatsappPackage && isWhatsappEnabled)) {
 
             val extras = sbn.notification.extras
             val title = extras.getString("android.title") ?: ""
             val targetKeyword = repository.getTargetKeyword()
 
-            Log.d("TeleSiren", "Notification received: $title | Target: $targetKeyword")
+            Log.d("NotifSiren", "Notification received from $packageName: $title | Target: $targetKeyword")
 
             // Match notification title with user-defined keyword
             if (targetKeyword.isNotEmpty() && title.contains(targetKeyword, ignoreCase = true)) {
@@ -40,6 +48,13 @@ class SirenService : NotificationListenerService() {
     }
 
     private fun triggerAlarm() {
+
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val streamType = AudioManager.STREAM_ALARM // Pastikan MediaPlayer Anda juga menggunakan stream ini
+
+        val maxVolume = audioManager.getStreamMaxVolume(streamType)
+        audioManager.setStreamVolume(streamType, maxVolume, 0)
+
         // Prevent overlapping alarms
         if (mediaPlayer?.isPlaying == true) return
 
@@ -63,10 +78,10 @@ class SirenService : NotificationListenerService() {
             
             // Broadcast alarm state to UI
             sendBroadcast(Intent("ALARM_STATUS_CHANGED").putExtra("IS_PLAYING", true))
-            Log.d("TeleSiren", "Alarm triggered")
+            Log.d("NotifSiren", "Alarm triggered")
             
         } catch (e: Exception) {
-            Log.e("TeleSiren", "Failed to play alarm: ${e.message}", e)
+            Log.e("NotifSiren", "Failed to play alarm: ${e.message}", e)
         }
     }
 
@@ -79,7 +94,7 @@ class SirenService : NotificationListenerService() {
             
             // Notify UI that alarm has stopped
             sendBroadcast(Intent("ALARM_STATUS_CHANGED").putExtra("IS_PLAYING", false))
-            Log.d("TeleSiren", "Alarm stopped")
+            Log.d("NotifSiren", "Alarm stopped")
         }
         return super.onStartCommand(intent, flags, startId)
     }
