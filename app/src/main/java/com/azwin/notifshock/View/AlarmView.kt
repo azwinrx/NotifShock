@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -23,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -32,6 +35,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.azwin.notifshock.R
 import com.azwin.notifshock.SirenService
 import com.azwin.notifshock.ViewModel.AlarmViewModel
 
@@ -90,7 +94,7 @@ fun AlarmView(viewModel: AlarmViewModel) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("NotifSh", fontWeight = FontWeight.Bold) },
+                title = { Text("NotifShock by Azwin", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -107,12 +111,11 @@ fun AlarmView(viewModel: AlarmViewModel) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header
-            Icon(
-                imageVector = Icons.Default.Notifications,
-                contentDescription = "Logo",
-                modifier = Modifier.size(72.dp),
-                tint = MaterialTheme.colorScheme.primary
+            Image(
+                painter = painterResource(id = R.drawable.ishowspeed),
+                contentDescription = "just ishowspeed shock png"
             )
+
 
             Text(
                 text = "Jangan Lewatkan Pesan Penting!",
@@ -168,7 +171,7 @@ fun AlarmView(viewModel: AlarmViewModel) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Aktifkan Aplikasi:", style = MaterialTheme.typography.labelLarge)
+                        Text("Aktifkan untuk aplikasi:", style = MaterialTheme.typography.labelLarge)
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
